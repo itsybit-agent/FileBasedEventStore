@@ -28,8 +28,11 @@ async Task Run()
     Console.WriteLine($"Order ID: {((OrderCreated)stored[0].Data).OrderId}");
 }
 
-// Events implement IStoreableEvent as a marker interface
-public record OrderCreated(string OrderId, decimal Amount) : IStoreableEvent;
+// Events implement IStoreableEvent with TimestampUtc
+public record OrderCreated(string OrderId, decimal Amount) : IStoreableEvent
+{
+    public string TimestampUtc { get; set; } = "";
+}
 
 public class Order : Aggregate
 {

@@ -51,6 +51,9 @@ public class FileEventStore : IEventStore
         foreach (var evt in events)
         {
             version++;
+            var timestamp = _clock.UtcNow;
+            evt.TimestampUtc = timestamp.ToString("O");
+
             var eventType = evt.GetType();
             var stored = new StoredEvent(
                 StreamVersion: version,
@@ -58,7 +61,7 @@ public class FileEventStore : IEventStore
                 StreamType: streamType,
                 EventType: eventType.Name,
                 ClrType: eventType.AssemblyQualifiedName!,
-                Timestamp: _clock.UtcNow,
+                Timestamp: timestamp,
                 Data: evt
             );
 

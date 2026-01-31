@@ -228,9 +228,11 @@ public class FileEventStoreTests : IDisposable
 public class TestEvent : IStoreableEvent
 {
     public string Message { get; set; } = "";
+    public string TimestampUtc { get; set; } = "";
 }
 
 public class AnotherEvent : IStoreableEvent
 {
     public int Value { get; set; }
+    public string TimestampUtc { get; set; } = "";
 }

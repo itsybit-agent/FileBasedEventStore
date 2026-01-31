@@ -12,8 +12,9 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="rootPath">The root path for event storage.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddFileEventStore(this IServiceCollection services, string rootPath)
+    public static IServiceCollection AddFileEventStore(this IServiceCollection services, string? rootPath)
     {
+        rootPath ??= Path.Combine(Directory.GetCurrentDirectory(), "data");
         services.AddSingleton<IEventSerializer, JsonEventSerializer>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IEventStore>(sp =>

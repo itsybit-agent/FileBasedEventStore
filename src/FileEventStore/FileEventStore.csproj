@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Authors>ItsyBIT AB</Authors>
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <Description>File based event store for .NET applications. For home use only 🤪</Description>
   </PropertyGroup>
 

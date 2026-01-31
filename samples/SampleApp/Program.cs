@@ -33,7 +33,7 @@ public record OrderCreated(string OrderId, decimal Amount) : IStoreableEvent;
 
 public class Order : Aggregate
 {
-    protected override void Apply(object evt)
+    protected override void Apply(IStoreableEvent evt)
     {
         // Handle events here
     }

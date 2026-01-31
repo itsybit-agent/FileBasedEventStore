@@ -26,7 +26,7 @@ public class FileEventStore : IEventStore
     private string GetEventFilePath(string streamId, long version) =>
         Path.Combine(GetStreamPath(streamId), $"{version:D6}.json");
 
-    public async Task<long> AppendAsync(string streamId, string? streamType, IEnumerable<object> events, ExpectedVersion expectedVersion)
+    public async Task<long> AppendAsync(string streamId, string? streamType, IEnumerable<IStoreableEvent> events, ExpectedVersion expectedVersion)
     {
         ValidateStreamId(streamId);
 
@@ -80,14 +80,20 @@ public class FileEventStore : IEventStore
         return version;
     }
 
-    public Task<long> AppendAsync(string streamId, string? streamType, object evt, ExpectedVersion expectedVersion)
+    public Task<long> AppendAsync(string streamId, string? streamType, IStoreableEvent evt, ExpectedVersion expectedVersion)
         => AppendAsync(streamId, streamType, new[] { evt }, expectedVersion);
 
-    public Task<long> AppendAsync(string streamId, IEnumerable<object> events, ExpectedVersion expectedVersion)
+    public Task<long> AppendAsync(string streamId, IEnumerable<IStoreableEvent> events, ExpectedVersion expectedVersion)
         => AppendAsync(streamId, null, events, expectedVersion);
 
-    public Task<long> AppendAsync(string streamId, object evt, ExpectedVersion expectedVersion)
+    public Task<long> AppendAsync(string streamId, IStoreableEvent evt, ExpectedVersion expectedVersion)
         => AppendAsync(streamId, null, [evt], expectedVersion);
+
+    public async Task<IReadOnlyList<IStoreableEvent>> LoadEventsAsync(string streamId)
+    {
+        var stored = await LoadStreamAsync(streamId);
+        return stored.Select(e => e.Data).ToList();
+    }
 
     public async Task<IReadOnlyList<StoredEvent>> LoadStreamAsync(string streamId)
     {

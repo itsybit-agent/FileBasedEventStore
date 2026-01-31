@@ -25,7 +25,7 @@ public class JsonEventSerializer : IEventSerializer
             EventType = evt.EventType,
             ClrType = evt.ClrType,
             Timestamp = evt.Timestamp,
-            Data = JsonSerializer.SerializeToElement(evt.Data, _options)
+            Data = JsonSerializer.SerializeToElement(evt.Data, evt.Data.GetType(), _options)
         };
 
         return JsonSerializer.Serialize(envelope, _options);
@@ -43,6 +43,9 @@ public class JsonEventSerializer : IEventSerializer
         var data = envelope.Data.Deserialize(eventType, _options)
             ?? throw new InvalidOperationException($"Failed to deserialize event data for {envelope.EventType}");
 
+        if (data is not IStoreableEvent storeableEvent)
+            throw new InvalidOperationException($"Event type {eventType.Name} does not implement IStoreableEvent");
+
         return new StoredEvent(
             envelope.StreamVersion,
             envelope.StreamId,
@@ -50,7 +53,7 @@ public class JsonEventSerializer : IEventSerializer
             envelope.EventType,
             envelope.ClrType,
             envelope.Timestamp,
-            data
+            storeableEvent
         );
     }
 

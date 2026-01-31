@@ -1,15 +1,14 @@
 namespace FileEventStore.Aggregates
 {
-
     public abstract class Aggregate
     {
         public string Id { get; protected set; } = "";
         public long Version { get; private set; } = 0;
 
-        private readonly List<object> _uncommittedEvents = new();
-        public IReadOnlyList<object> UncommittedEvents => _uncommittedEvents;
+        private readonly List<IStoreableEvent> _uncommittedEvents = new();
+        public IReadOnlyList<IStoreableEvent> UncommittedEvents => _uncommittedEvents;
 
-        protected void Emit(object evt)
+        protected void Emit(IStoreableEvent evt)
         {
             Apply(evt);
             _uncommittedEvents.Add(evt);
@@ -29,6 +28,6 @@ namespace FileEventStore.Aggregates
             _uncommittedEvents.Clear();
         }
 
-        protected abstract void Apply(object evt);
+        protected abstract void Apply(IStoreableEvent evt);
     }
 }

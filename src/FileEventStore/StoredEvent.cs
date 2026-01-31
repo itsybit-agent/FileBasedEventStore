@@ -7,5 +7,5 @@ public record StoredEvent(
     string EventType,
     string ClrType,
     DateTimeOffset Timestamp,
-    object Data
+    IStoreableEvent Data
 );

@@ -58,7 +58,7 @@ public class FileEventStoreTests : IDisposable
         var serializer = new JsonEventSerializer();
         var store = new EventStore(_tmp, serializer, new TestClock());
 
-        var events = new object[]
+        var events = new IStoreableEvent[]
         {
             new TestEvent { Message = "first" },
             new TestEvent { Message = "second" }

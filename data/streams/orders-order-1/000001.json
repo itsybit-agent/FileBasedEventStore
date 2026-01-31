@@ -1,0 +1,12 @@
+{
+  "streamVersion": 1,
+  "streamId": "orders-order-1",
+  "streamType": null,
+  "eventType": "OrderCreated",
+  "clrType": "OrderCreated, SampleApp, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+  "timestamp": "2026-01-31T08:28:56.3085765+00:00",
+  "data": {
+    "orderId": "order-1",
+    "amount": 19.99
+  }
+}

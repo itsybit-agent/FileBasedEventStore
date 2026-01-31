@@ -1,0 +1,46 @@
+ # Ignore Visual Studio temporary files, build outputs, and user-specific files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+bin/
+obj/
+artifacts/
+
+# Rider
+.idea/
+
+# NuGet
+**/packages/
+*.nupkg
+*.snupkg
+.nuget/
+.nuget/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test results
+TestResults/
+
+# VS Code
+.vscode/
+
+# Local NuGet feeds
+/nuget-local/
+%USERPROFILE%/nuget-local/
+
+# Sample app data (runtime files)
+/samples/SampleApp/data/
+
+# Ignore all claude.md files
+**/claude.md
+claude.md
+
+# Ignore obj from tests and build output
+**/bin/
+**/obj/

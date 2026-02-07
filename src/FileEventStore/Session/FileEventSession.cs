@@ -4,7 +4,8 @@ namespace FileEventStore.Session;
 
 /// <summary>
 /// File-based implementation of IEventSession.
-/// Provides Unit of Work pattern for event sourcing with atomic commits.
+/// Provides Unit of Work pattern for event sourcing, coordinating commits for tracked aggregates.
+/// Note: Each aggregate stream is committed independently; there is no cross-aggregate atomicity.
 /// </summary>
 public class FileEventSession : IEventSession
 {
@@ -68,8 +69,10 @@ public class FileEventSession : IEventSession
         if (aggregate is null)
             throw new ArgumentNullException(nameof(aggregate));
 
-        var key = GetKey<T>(aggregate.Id);
-        _trackedAggregates[key] = new AggregateEntry(aggregate, typeof(T), aggregate.Version);
+        // Use runtime type, not compile-time type, in case aggregate is held as base type
+        var aggregateType = aggregate.GetType();
+        var key = $"{aggregateType.Name}:{aggregate.Id}";
+        _trackedAggregates[key] = new AggregateEntry(aggregate, aggregateType, aggregate.Version);
     }
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)

@@ -6,11 +6,11 @@ A simple, file-based event store for .NET applications. Perfect for local develo
 
 ## Features
 
-- 📁 File-based storage (one JSON file per stream)
+- 📁 File-based storage (one directory per stream, one JSON file per event)
 - 🔄 Event sourcing with aggregates
 - 🎯 Unit of Work pattern with sessions
 - 💉 Built-in dependency injection support
-- ⚡ Optimistic concurrency control
+- ⚡ Optimistic concurrency control (per-stream)
 
 ## Installation
 
@@ -92,7 +92,7 @@ public record MemberJoined(
 
 ## Using Sessions (Unit of Work)
 
-Sessions provide a Unit of Work pattern for working with multiple aggregates. Changes are tracked and committed together.
+Sessions provide a Unit of Work pattern for working with multiple aggregates. Changes are tracked and saved in a single call, but each aggregate stream is committed independently (see Limitations).
 
 ### Basic Usage
 
@@ -255,17 +255,21 @@ builder.Services.AddFileEventStore(options =>
 
 ### Storage Structure
 
-Events are stored as JSON files, one per stream:
+Events are stored in directories per stream, with one JSON file per event:
 
 ```
-data/
-├── householdaggregate-abc123.json
-├── householdaggregate-def456.json
-├── inviteaggregate-INV001.json
-└── ...
+data/streams/
+├── householdaggregate-abc123/
+│   ├── 000001.json
+│   └── 000002.json
+├── householdaggregate-def456/
+│   └── 000001.json
+└── inviteaggregate-INV001/
+    ├── 000001.json
+    └── 000002.json
 ```
 
-Each file contains an array of events with metadata:
+Each file contains a single event with metadata:
 
 ```json
 [

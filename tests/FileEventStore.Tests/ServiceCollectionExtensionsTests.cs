@@ -2,6 +2,7 @@ using Xunit;
 using FileEventStore;
 using FileEventStore.Serialization;
 using FileEventStore.Aggregates;
+using FileEventStore.Session;
 using Microsoft.Extensions.DependencyInjection;
 using EventStore = global::FileEventStore.FileEventStore;
 
@@ -100,5 +101,51 @@ public class ServiceCollectionExtensionsTests : IDisposable
         var result = services.AddFileEventStore(_tmp);
 
         Assert.Same(services, result);
+    }
+
+    [Fact]
+    public void AddFileEventStore_RegistersSessionFactory()
+    {
+        var services = new ServiceCollection();
+
+        services.AddFileEventStore(_tmp);
+
+        var provider = services.BuildServiceProvider();
+
+        var factory = provider.GetService<IEventSessionFactory>();
+        Assert.NotNull(factory);
+        Assert.IsType<FileEventSessionFactory>(factory);
+    }
+
+    [Fact]
+    public void AddFileEventStore_WithOptions_RegistersSessionFactory()
+    {
+        var services = new ServiceCollection();
+
+        services.AddFileEventStore(options =>
+        {
+            options.RootPath = _tmp;
+        });
+
+        var provider = services.BuildServiceProvider();
+
+        var factory = provider.GetService<IEventSessionFactory>();
+        Assert.NotNull(factory);
+        Assert.IsType<FileEventSessionFactory>(factory);
+    }
+
+    [Fact]
+    public async Task AddFileEventStore_SessionFactoryCanOpenSession()
+    {
+        var services = new ServiceCollection();
+        services.AddFileEventStore(_tmp);
+
+        var provider = services.BuildServiceProvider();
+        var factory = provider.GetRequiredService<IEventSessionFactory>();
+
+        await using var session = factory.OpenSession();
+
+        Assert.NotNull(session);
+        Assert.IsAssignableFrom<IEventSession>(session);
     }
 }

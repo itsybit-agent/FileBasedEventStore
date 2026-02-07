@@ -2,7 +2,8 @@ namespace FileEventStore.Session;
 
 /// <summary>
 /// Unit of Work for event sourcing.
-/// Tracks loaded aggregates and commits all changes atomically.
+/// Tracks loaded aggregates and coordinates saving changes.
+/// Note: Each aggregate stream is committed independently; there is no cross-aggregate atomicity.
 /// </summary>
 public interface IEventSession : IAsyncDisposable
 {

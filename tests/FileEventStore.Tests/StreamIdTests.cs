@@ -142,4 +142,46 @@ public class StreamIdTests
         
         Assert.Equal("test-stream", streamId.ToString());
     }
+    
+    // ==========================================================================
+    // IMPLICIT CONVERSION TESTS
+    // ==========================================================================
+    
+    [Fact]
+    public void Implicit_conversion_from_string_creates_valid_StreamId()
+    {
+        StreamId streamId = "my-stream-123";
+        
+        Assert.Equal("my-stream-123", streamId.Value);
+    }
+    
+    [Fact]
+    public void Implicit_conversion_from_string_validates()
+    {
+        Assert.Throws<ArgumentException>(() =>
+        {
+            StreamId streamId = "../malicious";
+        });
+    }
+    
+    [Fact]
+    public void Implicit_conversion_to_string_returns_value()
+    {
+        StreamId streamId = StreamId.From("test-stream");
+        
+        string value = streamId;
+        
+        Assert.Equal("test-stream", value);
+    }
+    
+    [Fact]
+    public void Can_pass_string_to_method_expecting_StreamId()
+    {
+        // Simulates the ergonomic API usage
+        var result = AcceptStreamId("my-stream");
+        
+        Assert.Equal("my-stream", result);
+    }
+    
+    private static string AcceptStreamId(StreamId id) => id.Value;
 }

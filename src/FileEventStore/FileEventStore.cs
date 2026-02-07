@@ -26,9 +26,9 @@ public class FileEventStore : IEventStore
     private string GetEventFilePath(string streamId, long version) =>
         Path.Combine(GetStreamPath(streamId), $"{version:D6}.json");
 
-    public async Task<long> AppendAsync(string streamId, string? streamType, IEnumerable<IStoreableEvent> events, ExpectedVersion expectedVersion)
+    public async Task<long> AppendAsync(StreamId streamId, string? streamType, IEnumerable<IStoreableEvent> events, ExpectedVersion expectedVersion)
     {
-        ValidateStreamId(streamId);
+        // StreamId validates on construction via implicit conversion
 
         var streamPath = GetStreamPath(streamId);
         var currentVersion = GetCurrentStreamVersion(streamPath);
@@ -83,22 +83,22 @@ public class FileEventStore : IEventStore
         return version;
     }
 
-    public Task<long> AppendAsync(string streamId, string? streamType, IStoreableEvent evt, ExpectedVersion expectedVersion)
+    public Task<long> AppendAsync(StreamId streamId, string? streamType, IStoreableEvent evt, ExpectedVersion expectedVersion)
         => AppendAsync(streamId, streamType, new[] { evt }, expectedVersion);
 
-    public Task<long> AppendAsync(string streamId, IEnumerable<IStoreableEvent> events, ExpectedVersion expectedVersion)
+    public Task<long> AppendAsync(StreamId streamId, IEnumerable<IStoreableEvent> events, ExpectedVersion expectedVersion)
         => AppendAsync(streamId, null, events, expectedVersion);
 
-    public Task<long> AppendAsync(string streamId, IStoreableEvent evt, ExpectedVersion expectedVersion)
+    public Task<long> AppendAsync(StreamId streamId, IStoreableEvent evt, ExpectedVersion expectedVersion)
         => AppendAsync(streamId, null, [evt], expectedVersion);
 
-    public async Task<IReadOnlyList<IStoreableEvent>> LoadEventsAsync(string streamId)
+    public async Task<IReadOnlyList<IStoreableEvent>> LoadEventsAsync(StreamId streamId)
     {
         var stored = await LoadStreamAsync(streamId);
         return stored.Select(e => e.Data).ToList();
     }
 
-    public async Task<IReadOnlyList<StoredEvent>> LoadStreamAsync(string streamId)
+    public async Task<IReadOnlyList<StoredEvent>> LoadStreamAsync(StreamId streamId)
     {
         var streamPath = GetStreamPath(streamId);
 
@@ -120,13 +120,13 @@ public class FileEventStore : IEventStore
         return events;
     }
 
-    public Task<long> GetCurrentVersionAsync(string streamId)
+    public Task<long> GetCurrentVersionAsync(StreamId streamId)
     {
         var streamPath = GetStreamPath(streamId);
         return Task.FromResult(GetCurrentStreamVersion(streamPath));
     }
 
-    public Task<bool> StreamExistsAsync(string streamId)
+    public Task<bool> StreamExistsAsync(StreamId streamId)
     {
         var streamPath = GetStreamPath(streamId);
         return Task.FromResult(Directory.Exists(streamPath) && Directory.GetFiles(streamPath, "*.json").Any());
@@ -147,16 +147,4 @@ public class FileEventStore : IEventStore
             .Max();
     }
 
-    private static void ValidateStreamId(string streamId)
-    {
-        if (string.IsNullOrWhiteSpace(streamId))
-            throw new ArgumentException("Stream ID cannot be empty", nameof(streamId));
-
-        var invalidChars = Path.GetInvalidFileNameChars();
-        if (streamId.Any(c => invalidChars.Contains(c)))
-            throw new ArgumentException($"Stream ID contains invalid characters: {streamId}", nameof(streamId));
-
-        if (streamId.Contains(".."))
-            throw new ArgumentException("Stream ID cannot contain '..'", nameof(streamId));
-    }
 }

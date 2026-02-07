@@ -86,5 +86,14 @@ public readonly partial struct StreamId : IEquatable<StreamId>
     
     public static bool operator !=(StreamId left, StreamId right) => !left.Equals(right);
 
+    /// <summary>
+    /// Implicit conversion from StreamId to string.
+    /// </summary>
     public static implicit operator string(StreamId id) => id.Value;
+    
+    /// <summary>
+    /// Implicit conversion from string to StreamId.
+    /// Validates the string and throws ArgumentException if invalid.
+    /// </summary>
+    public static implicit operator StreamId(string id) => From(id);
 }

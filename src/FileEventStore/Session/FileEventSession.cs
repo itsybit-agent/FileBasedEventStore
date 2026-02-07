@@ -41,8 +41,8 @@ public class FileEventSession : IEventSession
         var aggregate = new T();
         aggregate.Load(events);
         
-        // Track it
-        _trackedAggregates[key] = new AggregateEntry(aggregate, typeof(T));
+        // Track it with the version at load time
+        _trackedAggregates[key] = new AggregateEntry(aggregate, typeof(T), aggregate.Version);
         
         return aggregate;
     }
@@ -53,10 +53,10 @@ public class FileEventSession : IEventSession
         if (aggregate is not null)
             return aggregate;
 
-        // Create new and track it
+        // Create new and track it (version 0 = new aggregate)
         aggregate = new T();
         var key = GetKey<T>(id);
-        _trackedAggregates[key] = new AggregateEntry(aggregate, typeof(T));
+        _trackedAggregates[key] = new AggregateEntry(aggregate, typeof(T), 0);
         
         return aggregate;
     }
@@ -69,7 +69,7 @@ public class FileEventSession : IEventSession
             throw new ArgumentNullException(nameof(aggregate));
 
         var key = GetKey<T>(aggregate.Id);
-        _trackedAggregates[key] = new AggregateEntry(aggregate, typeof(T));
+        _trackedAggregates[key] = new AggregateEntry(aggregate, typeof(T), aggregate.Version);
     }
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -97,9 +97,12 @@ public class FileEventSession : IEventSession
             try
             {
                 var streamId = GetStreamId(entry.AggregateType, entry.Aggregate.Id);
-                var expectedVersion = entry.Aggregate.Version == 0
+                
+                // Expected version is the version at load time (entry.LoadedVersion)
+                // For new aggregates (never loaded), expect stream doesn't exist
+                var expectedVersion = entry.LoadedVersion == 0
                     ? ExpectedVersion.None
-                    : ExpectedVersion.Exactly(entry.Aggregate.Version - entry.Aggregate.UncommittedEvents.Count);
+                    : ExpectedVersion.Exactly(entry.LoadedVersion);
 
                 await _store.AppendAsync(
                     streamId,
@@ -148,11 +151,13 @@ public class FileEventSession : IEventSession
     {
         public Aggregate Aggregate { get; }
         public Type AggregateType { get; }
+        public long LoadedVersion { get; }
 
-        public AggregateEntry(Aggregate aggregate, Type aggregateType)
+        public AggregateEntry(Aggregate aggregate, Type aggregateType, long loadedVersion)
         {
             Aggregate = aggregate;
             AggregateType = aggregateType;
+            LoadedVersion = loadedVersion;
         }
     }
 }

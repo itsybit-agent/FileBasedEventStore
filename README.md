@@ -43,7 +43,7 @@ public class HouseholdAggregate : Aggregate
         if (!string.IsNullOrEmpty(Id))
             throw new InvalidOperationException("Household already exists");
 
-        Apply(new HouseholdCreated(id, name, creatorId, DateTime.UtcNow));
+        Emit(new HouseholdCreated(id, name, creatorId, DateTime.UtcNow));
     }
 
     public void AddMember(string userId, string displayName)
@@ -51,20 +51,23 @@ public class HouseholdAggregate : Aggregate
         if (Members.Contains(userId))
             throw new InvalidOperationException("Already a member");
 
-        Apply(new MemberJoined(Id, userId, displayName, DateTime.UtcNow));
+        Emit(new MemberJoined(Id, userId, displayName, DateTime.UtcNow));
     }
 
-    // Event handlers
-    private void On(HouseholdCreated e)
+    // Apply handles both replay (Load) and new events (Emit)
+    protected override void Apply(IStoreableEvent evt)
     {
-        Id = e.HouseholdId;
-        Name = e.Name;
-        Members.Add(e.CreatorId);
-    }
-
-    private void On(MemberJoined e)
-    {
-        Members.Add(e.UserId);
+        switch (evt)
+        {
+            case HouseholdCreated e:
+                Id = e.HouseholdId;
+                Name = e.Name;
+                Members.Add(e.CreatorId);
+                break;
+            case MemberJoined e:
+                Members.Add(e.UserId);
+                break;
+        }
     }
 }
 ```
@@ -222,6 +225,20 @@ public class JoinHouseholdHandler
         await session.SaveChangesAsync();
     }
 }
+```
+
+## Samples
+
+Two sample applications are included:
+
+- **SampleApp** - Basic event store usage with direct `IEventStore` access
+- **SessionSample** - Unit of Work pattern with multi-aggregate operations
+
+Run them with:
+
+```bash
+dotnet run --project samples/SampleApp
+dotnet run --project samples/SessionSample
 ```
 
 ## Configuration

@@ -1,5 +1,6 @@
 using FileEventStore.Aggregates;
 using FileEventStore.Serialization;
+using FileEventStore.Session;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FileEventStore;
@@ -24,6 +25,9 @@ public static class ServiceCollectionExtensions
             return new FileEventStore(rootPath, serializer, clock);
         });
         services.AddTransient(typeof(AggregateRepository<>));
+        
+        // Session support (Unit of Work)
+        services.AddSingleton<IEventSessionFactory, FileEventSessionFactory>();
 
         return services;
     }
@@ -51,6 +55,9 @@ public static class ServiceCollectionExtensions
             return new FileEventStore(options.RootPath, serializer, clock);
         });
         services.AddTransient(typeof(AggregateRepository<>));
+        
+        // Session support (Unit of Work)
+        services.AddSingleton<IEventSessionFactory, FileEventSessionFactory>();
 
         return services;
     }

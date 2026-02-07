@@ -14,7 +14,7 @@ namespace FileEventStore.Aggregates
         public async Task<T?> LoadAsync(string id)
         {
             var streamId = _streamIdFromAggregateId(id);
-            var events = await _store.LoadStreamAsync(streamId);
+            var events = await _store.FetchStreamAsync(streamId);
 
             if (events.Count == 0)
                 return null;
@@ -39,7 +39,7 @@ namespace FileEventStore.Aggregates
                 ? ExpectedVersion.None
                 : ExpectedVersion.Exactly(aggregate.Version - aggregate.UncommittedEvents.Count);
 
-            await _store.AppendAsync(streamId, typeof(T).Name, aggregate.UncommittedEvents, expectedVersion);
+            await _store.AppendToStreamAsync(streamId, typeof(T).Name, aggregate.UncommittedEvents, expectedVersion);
             aggregate.ClearUncommittedEvents();
         }
     }

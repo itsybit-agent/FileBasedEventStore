@@ -5,10 +5,14 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Authors>ItsyBIT AB</Authors>
-    <Version>1.0.5</Version>
+    <Version>1.1.0</Version>
     <Description>File based event store for .NET applications. For home use only 🤪</Description>
   
     <PackageReleaseNotes>
+        v1.1.0
+        - Added Session/Unit of Work pattern (IEventSession, IEventSessionFactory)
+        - Track loaded aggregates with identity map
+        - Batch commits via SaveChangesAsync()
         v1.0.5
         - Loadstream returns actual events
         v1.0.0

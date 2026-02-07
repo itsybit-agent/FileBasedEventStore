@@ -20,9 +20,9 @@ async Task Run()
 
     // Uses simplified overload - no streamType needed
     // EventType and ClrType are resolved automatically from the CLR type
-    await store.AppendAsync("orders-order-1", ev, ExpectedVersion.Any);
+    await store.AppendToStreamAsync("orders-order-1", [ev], ExpectedVersion.Any);
 
-    var stored = await store.LoadStreamAsync("orders-order-1");
+    var stored = await store.FetchStreamAsync("orders-order-1");
     Console.WriteLine($"Loaded {stored.Count} events");
     Console.WriteLine($"Event type: {stored[0].EventType}");
     Console.WriteLine($"Order ID: {((OrderCreated)stored[0].Data).OrderId}");

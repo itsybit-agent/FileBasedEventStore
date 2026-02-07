@@ -146,9 +146,11 @@ public class FileEventSession : IEventSession
 
     private static string GetKey<T>(string id) => $"{typeof(T).Name}:{id}";
 
-    private static string GetStreamId<T>(string id) => $"{typeof(T).Name.ToLowerInvariant()}-{id}";
+    private static StreamId GetStreamId<T>(string id) => 
+        StreamId.From($"{typeof(T).Name.ToLowerInvariant()}-{id}");
     
-    private static string GetStreamId(Type type, string id) => $"{type.Name.ToLowerInvariant()}-{id}";
+    private static StreamId GetStreamId(Type type, string id) => 
+        StreamId.From($"{type.Name.ToLowerInvariant()}-{id}");
 
     private class AggregateEntry
     {

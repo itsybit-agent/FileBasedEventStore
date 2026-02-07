@@ -345,6 +345,45 @@ public class SessionTests : IDisposable
     }
 
     // =========================================================================
+    // Input Validation
+    // =========================================================================
+
+    [Theory]
+    [InlineData("../etc/passwd")]
+    [InlineData("..")]
+    [InlineData("foo/../bar")]
+    public async Task LoadAsync_rejects_path_traversal_ids(string maliciousId)
+    {
+        await using var session = _sessionFactory.OpenSession();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => 
+            session.LoadAsync<TestAggregate>(maliciousId));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public async Task LoadAsync_rejects_empty_ids(string? emptyId)
+    {
+        await using var session = _sessionFactory.OpenSession();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => 
+            session.LoadAsync<TestAggregate>(emptyId!));
+    }
+
+    [Theory]
+    [InlineData("../etc/passwd")]
+    [InlineData("..")]
+    public async Task LoadOrCreateAsync_rejects_path_traversal_ids(string maliciousId)
+    {
+        await using var session = _sessionFactory.OpenSession();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => 
+            session.LoadOrCreateAsync<TestAggregate>(maliciousId));
+    }
+
+    // =========================================================================
     // Store Behavior
     // =========================================================================
 

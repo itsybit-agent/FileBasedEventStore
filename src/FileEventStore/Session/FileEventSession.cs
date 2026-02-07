@@ -1,3 +1,4 @@
+using System.IO;
 using FileEventStore.Aggregates;
 
 namespace FileEventStore.Session;
@@ -23,6 +24,7 @@ public class FileEventSession : IEventSession
     public async Task<T?> LoadAsync<T>(string id) where T : Aggregate, new()
     {
         ThrowIfDisposed();
+        ValidateAggregateId(id);
         
         var key = GetKey<T>(id);
         
@@ -32,7 +34,7 @@ public class FileEventSession : IEventSession
             return entry.Aggregate as T;
         }
 
-        // Load from store
+        // Load from store (StreamId.From validates the full stream id)
         var streamId = GetStreamId<T>(id);
         var events = await _store.LoadStreamAsync(streamId);
 
@@ -50,6 +52,9 @@ public class FileEventSession : IEventSession
 
     public async Task<T> LoadOrCreateAsync<T>(string id) where T : Aggregate, new()
     {
+        ThrowIfDisposed();
+        ValidateAggregateId(id);
+        
         var aggregate = await LoadAsync<T>(id);
         if (aggregate is not null)
             return aggregate;
@@ -151,6 +156,18 @@ public class FileEventSession : IEventSession
     
     private static StreamId GetStreamId(Type type, string id) => 
         StreamId.From($"{type.Name.ToLowerInvariant()}-{id}");
+
+    private static void ValidateAggregateId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            throw new ArgumentException("Aggregate id cannot be null or empty.", nameof(id));
+        
+        if (id.Contains(".."))
+            throw new ArgumentException("Aggregate id cannot contain '..' (path traversal).", nameof(id));
+        
+        if (id.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            throw new ArgumentException("Aggregate id contains invalid characters.", nameof(id));
+    }
 
     private class AggregateEntry
     {

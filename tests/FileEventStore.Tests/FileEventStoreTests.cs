@@ -27,9 +27,9 @@ public class FileEventStoreTests : IDisposable
         var store = new EventStore(_tmp, serializer, new TestClock());
 
         var ev = new TestEvent { Message = "hello" };
-        await store.AppendAsync("stream-1", "TestStream", ev, ExpectedVersion.None);
+        await store.AppendToStreamAsync("stream-1", "TestStream", ev, ExpectedVersion.None);
 
-        var loaded = await store.LoadStreamAsync("stream-1");
+        var loaded = await store.FetchStreamAsync("stream-1");
         Assert.Single(loaded);
         Assert.IsType<TestEvent>(loaded[0].Data);
         Assert.Equal("hello", ((TestEvent)loaded[0].Data).Message);
@@ -44,9 +44,9 @@ public class FileEventStoreTests : IDisposable
         var store = new EventStore(_tmp, serializer, new TestClock());
 
         var ev = new TestEvent { Message = "hello" };
-        await store.AppendAsync("stream-1", ev, ExpectedVersion.None);
+        await store.AppendToStreamAsync("stream-1", ev, ExpectedVersion.None);
 
-        var loaded = await store.LoadStreamAsync("stream-1");
+        var loaded = await store.FetchStreamAsync("stream-1");
         Assert.Single(loaded);
         Assert.Null(loaded[0].StreamType);
         Assert.Equal("TestEvent", loaded[0].EventType);
@@ -63,9 +63,9 @@ public class FileEventStoreTests : IDisposable
             new TestEvent { Message = "first" },
             new TestEvent { Message = "second" }
         };
-        await store.AppendAsync("stream-1", events, ExpectedVersion.None);
+        await store.AppendToStreamAsync("stream-1", events, ExpectedVersion.None);
 
-        var loaded = await store.LoadStreamAsync("stream-1");
+        var loaded = await store.FetchStreamAsync("stream-1");
         Assert.Equal(2, loaded.Count);
         Assert.Equal("first", ((TestEvent)loaded[0].Data).Message);
         Assert.Equal("second", ((TestEvent)loaded[1].Data).Message);
@@ -77,13 +77,13 @@ public class FileEventStoreTests : IDisposable
         var serializer = new JsonEventSerializer();
         var store = new EventStore(_tmp, serializer, new TestClock());
 
-        await store.AppendAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
-        await store.AppendAsync("s1", new TestEvent { Message = "b" }, ExpectedVersion.Exactly(1));
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "b" }, ExpectedVersion.Exactly(1));
 
         var files = Directory.GetFiles(Path.Combine(_tmp, "streams", "s1"));
         Assert.Equal(2, files.Length);
 
-        var current = await store.GetCurrentVersionAsync("s1");
+        var current = await store.GetStreamVersionAsync("s1");
         Assert.Equal(2, current);
     }
 
@@ -92,10 +92,10 @@ public class FileEventStoreTests : IDisposable
     {
         var store = new EventStore(_tmp);
 
-        await store.AppendAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
 
         await Assert.ThrowsAsync<ConcurrencyException>(() =>
-            store.AppendAsync("s1", new TestEvent { Message = "b" }, ExpectedVersion.None));
+            store.AppendToStreamAsync("s1", new TestEvent { Message = "b" }, ExpectedVersion.None));
     }
 
     [Fact]
@@ -103,10 +103,10 @@ public class FileEventStoreTests : IDisposable
     {
         var store = new EventStore(_tmp);
 
-        await store.AppendAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
 
         await Assert.ThrowsAsync<ConcurrencyException>(() =>
-            store.AppendAsync("s1", new TestEvent { Message = "b" }, ExpectedVersion.Exactly(5)));
+            store.AppendToStreamAsync("s1", new TestEvent { Message = "b" }, ExpectedVersion.Exactly(5)));
     }
 
     [Fact]
@@ -114,11 +114,11 @@ public class FileEventStoreTests : IDisposable
     {
         var store = new EventStore(_tmp);
 
-        await store.AppendAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.Any);
-        await store.AppendAsync("s1", new TestEvent { Message = "b" }, ExpectedVersion.Any);
-        await store.AppendAsync("s1", new TestEvent { Message = "c" }, ExpectedVersion.Any);
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.Any);
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "b" }, ExpectedVersion.Any);
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "c" }, ExpectedVersion.Any);
 
-        var loaded = await store.LoadStreamAsync("s1");
+        var loaded = await store.FetchStreamAsync("s1");
         Assert.Equal(3, loaded.Count);
     }
 
@@ -127,7 +127,7 @@ public class FileEventStoreTests : IDisposable
     {
         var store = new EventStore(_tmp);
 
-        var loaded = await store.LoadStreamAsync("nonexistent");
+        var loaded = await store.FetchStreamAsync("nonexistent");
 
         Assert.Empty(loaded);
     }
@@ -137,7 +137,7 @@ public class FileEventStoreTests : IDisposable
     {
         var store = new EventStore(_tmp);
 
-        await store.AppendAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
 
         Assert.True(await store.StreamExistsAsync("s1"));
         Assert.False(await store.StreamExistsAsync("s2"));
@@ -149,7 +149,7 @@ public class FileEventStoreTests : IDisposable
         var store = new EventStore(_tmp);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            store.AppendAsync("stream/invalid", new TestEvent(), ExpectedVersion.None));
+            store.AppendToStreamAsync("stream/invalid", new TestEvent(), ExpectedVersion.None));
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public class FileEventStoreTests : IDisposable
         var store = new EventStore(_tmp);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            store.AppendAsync("../escape", new TestEvent(), ExpectedVersion.None));
+            store.AppendToStreamAsync("../escape", new TestEvent(), ExpectedVersion.None));
     }
 
     [Fact]
@@ -167,9 +167,9 @@ public class FileEventStoreTests : IDisposable
         var clock = new TestClock { UtcNow = new DateTimeOffset(2025, 1, 15, 10, 30, 0, TimeSpan.Zero) };
         var store = new EventStore(_tmp, new JsonEventSerializer(), clock);
 
-        await store.AppendAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
 
-        var loaded = await store.LoadStreamAsync("s1");
+        var loaded = await store.FetchStreamAsync("s1");
         Assert.Equal(clock.UtcNow, loaded[0].Timestamp);
     }
 
@@ -179,11 +179,11 @@ public class FileEventStoreTests : IDisposable
         var clock = new TestClock { UtcNow = new DateTimeOffset(2025, 1, 15, 10, 30, 0, TimeSpan.Zero) };
         var store = new EventStore(_tmp, new JsonEventSerializer(), clock);
 
-        await store.AppendAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
         clock.Advance(TimeSpan.FromHours(1));
-        await store.AppendAsync("s1", new TestEvent { Message = "b" }, ExpectedVersion.Exactly(1));
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "b" }, ExpectedVersion.Exactly(1));
 
-        var loaded = await store.LoadStreamAsync("s1");
+        var loaded = await store.FetchStreamAsync("s1");
         Assert.Equal(TimeSpan.FromHours(1), loaded[1].Timestamp - loaded[0].Timestamp);
     }
 
@@ -192,9 +192,9 @@ public class FileEventStoreTests : IDisposable
     {
         var store = new EventStore(_tmp);
 
-        await store.AppendAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
 
-        var loaded = await store.LoadStreamAsync("s1");
+        var loaded = await store.FetchStreamAsync("s1");
         Assert.Equal("TestEvent", loaded[0].EventType);
     }
 
@@ -203,9 +203,9 @@ public class FileEventStoreTests : IDisposable
     {
         var store = new EventStore(_tmp);
 
-        await store.AppendAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
 
-        var loaded = await store.LoadStreamAsync("s1");
+        var loaded = await store.FetchStreamAsync("s1");
         Assert.Equal(typeof(TestEvent).AssemblyQualifiedName, loaded[0].ClrType);
     }
 
@@ -214,10 +214,10 @@ public class FileEventStoreTests : IDisposable
     {
         var store = new EventStore(_tmp);
 
-        await store.AppendAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
-        await store.AppendAsync("s1", new AnotherEvent { Value = 42 }, ExpectedVersion.Exactly(1));
+        await store.AppendToStreamAsync("s1", new TestEvent { Message = "a" }, ExpectedVersion.None);
+        await store.AppendToStreamAsync("s1", new AnotherEvent { Value = 42 }, ExpectedVersion.Exactly(1));
 
-        var loaded = await store.LoadStreamAsync("s1");
+        var loaded = await store.FetchStreamAsync("s1");
         Assert.IsType<TestEvent>(loaded[0].Data);
         Assert.IsType<AnotherEvent>(loaded[1].Data);
         Assert.Equal(42, ((AnotherEvent)loaded[1].Data).Value);

@@ -2,31 +2,63 @@ namespace FileEventStore.Session;
 
 /// <summary>
 /// Unit of Work for event sourcing.
-/// Tracks loaded aggregates and coordinates saving changes.
+/// Provides both aggregate-based and raw stream operations.
 /// Note: Each aggregate stream is committed independently; there is no cross-aggregate atomicity.
 /// </summary>
 public interface IEventSession : IAsyncDisposable
 {
+    // =========================================================================
+    // AGGREGATE OPERATIONS
+    // =========================================================================
+    
     /// <summary>
-    /// Load an aggregate by id. Returns null if not found.
+    /// Load and rebuild an aggregate from its event stream.
+    /// Returns null if stream doesn't exist.
     /// Subsequent calls with the same id return the cached instance.
     /// </summary>
-    Task<T?> LoadAsync<T>(string id) where T : Aggregates.Aggregate, new();
+    Task<T?> AggregateStreamAsync<T>(string id) where T : Aggregates.Aggregate, new();
 
     /// <summary>
-    /// Load an aggregate by id, creating a new one if not found.
+    /// Load and rebuild an aggregate, creating a new one if stream doesn't exist.
     /// </summary>
-    Task<T> LoadOrCreateAsync<T>(string id) where T : Aggregates.Aggregate, new();
+    Task<T> AggregateStreamOrCreateAsync<T>(string id) where T : Aggregates.Aggregate, new();
 
     /// <summary>
-    /// Mark an aggregate to be saved when SaveChangesAsync is called.
-    /// Call this after modifying an aggregate that wasn't loaded through this session.
-    /// Aggregates loaded via LoadAsync/LoadOrCreateAsync are tracked automatically.
+    /// Track an externally-created aggregate for saving.
+    /// Aggregates loaded via AggregateStreamAsync are tracked automatically.
     /// </summary>
-    void Store<T>(T aggregate) where T : Aggregates.Aggregate;
+    void Track<T>(T aggregate) where T : Aggregates.Aggregate;
 
+    // =========================================================================
+    // STREAM OPERATIONS (raw access)
+    // =========================================================================
+    
     /// <summary>
-    /// Commit all pending changes to the event store.
+    /// Queue events to start a new stream. Fails on SaveChangesAsync if stream exists.
+    /// </summary>
+    void StartStream(StreamId streamId, params IStoreableEvent[] events);
+    
+    /// <summary>
+    /// Queue events to start a new stream with aggregate type. Fails on SaveChangesAsync if stream exists.
+    /// </summary>
+    void StartStream<T>(string id, params IStoreableEvent[] events) where T : Aggregates.Aggregate;
+    
+    /// <summary>
+    /// Queue events to append to an existing stream.
+    /// </summary>
+    void Append(StreamId streamId, params IStoreableEvent[] events);
+    
+    /// <summary>
+    /// Fetch raw events from a stream (not cached, immediate read).
+    /// </summary>
+    Task<IReadOnlyList<StoredEvent>> FetchStreamAsync(StreamId streamId);
+
+    // =========================================================================
+    // UNIT OF WORK
+    // =========================================================================
+    
+    /// <summary>
+    /// Commit all pending changes (aggregates + queued stream operations).
     /// </summary>
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
     

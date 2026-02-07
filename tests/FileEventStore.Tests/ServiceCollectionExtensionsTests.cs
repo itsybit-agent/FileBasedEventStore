@@ -86,9 +86,9 @@ public class ServiceCollectionExtensionsTests : IDisposable
         var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IEventStore>();
 
-        await store.AppendAsync("test-stream", new TestEvent { Message = "hello" }, ExpectedVersion.None);
+        await store.AppendToStreamAsync("test-stream", new TestEvent { Message = "hello" }, ExpectedVersion.None);
 
-        var loaded = await store.LoadStreamAsync("test-stream");
+        var loaded = await store.FetchStreamAsync("test-stream");
         Assert.Single(loaded);
         Assert.Equal("hello", ((TestEvent)loaded[0].Data).Message);
     }

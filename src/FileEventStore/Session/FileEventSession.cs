@@ -1,17 +1,17 @@
-using System.IO;
 using FileEventStore.Aggregates;
 
 namespace FileEventStore.Session;
 
 /// <summary>
 /// File-based implementation of IEventSession.
-/// Provides Unit of Work pattern for event sourcing, coordinating commits for tracked aggregates.
-/// Note: Each aggregate stream is committed independently; there is no cross-aggregate atomicity.
+/// Provides Unit of Work pattern with both aggregate and raw stream operations.
+/// Note: Each stream is committed independently; there is no cross-aggregate atomicity.
 /// </summary>
 public class FileEventSession : IEventSession
 {
     private readonly IEventStore _store;
     private readonly Dictionary<string, AggregateEntry> _trackedAggregates = new();
+    private readonly List<PendingStreamOperation> _pendingStreamOps = new();
     private bool _disposed;
 
     public FileEventSession(IEventStore store)
@@ -19,9 +19,15 @@ public class FileEventSession : IEventSession
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
-    public bool HasChanges => _trackedAggregates.Values.Any(e => e.Aggregate.UncommittedEvents.Count > 0);
+    public bool HasChanges => 
+        _trackedAggregates.Values.Any(e => e.Aggregate.UncommittedEvents.Count > 0) ||
+        _pendingStreamOps.Count > 0;
 
-    public async Task<T?> LoadAsync<T>(string id) where T : Aggregate, new()
+    // =========================================================================
+    // AGGREGATE OPERATIONS
+    // =========================================================================
+
+    public async Task<T?> AggregateStreamAsync<T>(string id) where T : Aggregate, new()
     {
         ThrowIfDisposed();
         ValidateAggregateId(id);
@@ -34,9 +40,9 @@ public class FileEventSession : IEventSession
             return entry.Aggregate as T;
         }
 
-        // Load from store (StreamId.From validates the full stream id)
+        // Load from store
         var streamId = GetStreamId<T>(id);
-        var events = await _store.LoadStreamAsync(streamId);
+        var events = await _store.FetchStreamAsync(streamId);
 
         if (events.Count == 0)
             return null;
@@ -50,12 +56,12 @@ public class FileEventSession : IEventSession
         return aggregate;
     }
 
-    public async Task<T> LoadOrCreateAsync<T>(string id) where T : Aggregate, new()
+    public async Task<T> AggregateStreamOrCreateAsync<T>(string id) where T : Aggregate, new()
     {
         ThrowIfDisposed();
         ValidateAggregateId(id);
         
-        var aggregate = await LoadAsync<T>(id);
+        var aggregate = await AggregateStreamAsync<T>(id);
         if (aggregate is not null)
             return aggregate;
 
@@ -67,37 +73,86 @@ public class FileEventSession : IEventSession
         return aggregate;
     }
 
-    public void Store<T>(T aggregate) where T : Aggregate
+    public void Track<T>(T aggregate) where T : Aggregate
     {
         ThrowIfDisposed();
         
         if (aggregate is null)
             throw new ArgumentNullException(nameof(aggregate));
 
-        // Use runtime type, not compile-time type, in case aggregate is held as base type
+        // Use runtime type in case aggregate is held as base type
         var aggregateType = aggregate.GetType();
         var key = $"{aggregateType.Name}:{aggregate.Id}";
         _trackedAggregates[key] = new AggregateEntry(aggregate, aggregateType, aggregate.Version);
     }
 
+    // =========================================================================
+    // STREAM OPERATIONS
+    // =========================================================================
+
+    public void StartStream(StreamId streamId, params IStoreableEvent[] events)
+    {
+        ThrowIfDisposed();
+        _pendingStreamOps.Add(new PendingStreamOperation(streamId, null, events, isNew: true));
+    }
+
+    public void StartStream<T>(string id, params IStoreableEvent[] events) where T : Aggregate
+    {
+        ThrowIfDisposed();
+        var streamId = GetStreamId<T>(id);
+        _pendingStreamOps.Add(new PendingStreamOperation(streamId, typeof(T).Name, events, isNew: true));
+    }
+
+    public void Append(StreamId streamId, params IStoreableEvent[] events)
+    {
+        ThrowIfDisposed();
+        _pendingStreamOps.Add(new PendingStreamOperation(streamId, null, events, isNew: false));
+    }
+
+    public Task<IReadOnlyList<StoredEvent>> FetchStreamAsync(StreamId streamId)
+    {
+        ThrowIfDisposed();
+        return _store.FetchStreamAsync(streamId);
+    }
+
+    // =========================================================================
+    // UNIT OF WORK
+    // =========================================================================
+
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
 
-        // Get all aggregates with uncommitted events
+        var exceptions = new List<Exception>();
+
+        // Save pending stream operations first
+        foreach (var op in _pendingStreamOps)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            
+            try
+            {
+                if (op.IsNew)
+                {
+                    await _store.StartStreamAsync(op.StreamId, op.StreamType, op.Events);
+                }
+                else
+                {
+                    await _store.AppendToStreamAsync(op.StreamId, op.StreamType, op.Events, ExpectedVersion.Any);
+                }
+            }
+            catch (Exception ex)
+            {
+                exceptions.Add(ex);
+            }
+        }
+        _pendingStreamOps.Clear();
+
+        // Save tracked aggregates
         var toSave = _trackedAggregates.Values
             .Where(e => e.Aggregate.UncommittedEvents.Count > 0)
             .ToList();
 
-        if (toSave.Count == 0)
-            return;
-
-        // Save each aggregate
-        // Note: FileEventStore writes to separate files per stream, so this is
-        // effectively atomic per-aggregate. True cross-aggregate atomicity would
-        // require a transaction log, which is future work.
-        var exceptions = new List<Exception>();
-        
         foreach (var entry in toSave)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -106,13 +161,11 @@ public class FileEventSession : IEventSession
             {
                 var streamId = GetStreamId(entry.AggregateType, entry.Aggregate.Id);
                 
-                // Expected version is the version at load time (entry.LoadedVersion)
-                // For new aggregates (never loaded), expect stream doesn't exist
                 var expectedVersion = entry.LoadedVersion == 0
                     ? ExpectedVersion.None
                     : ExpectedVersion.Exactly(entry.LoadedVersion);
 
-                await _store.AppendAsync(
+                await _store.AppendToStreamAsync(
                     streamId,
                     entry.AggregateType.Name,
                     entry.Aggregate.UncommittedEvents,
@@ -128,7 +181,7 @@ public class FileEventSession : IEventSession
 
         if (exceptions.Count > 0)
         {
-            throw new AggregateException("One or more aggregates failed to save", exceptions);
+            throw new AggregateException("One or more streams failed to save", exceptions);
         }
     }
 
@@ -139,9 +192,14 @@ public class FileEventSession : IEventSession
 
         _disposed = true;
         _trackedAggregates.Clear();
+        _pendingStreamOps.Clear();
         
         return ValueTask.CompletedTask;
     }
+
+    // =========================================================================
+    // HELPERS
+    // =========================================================================
 
     private void ThrowIfDisposed()
     {
@@ -169,6 +227,10 @@ public class FileEventSession : IEventSession
             throw new ArgumentException("Aggregate id contains invalid characters.", nameof(id));
     }
 
+    // =========================================================================
+    // INTERNAL TYPES
+    // =========================================================================
+
     private class AggregateEntry
     {
         public Aggregate Aggregate { get; }
@@ -180,6 +242,22 @@ public class FileEventSession : IEventSession
             Aggregate = aggregate;
             AggregateType = aggregateType;
             LoadedVersion = loadedVersion;
+        }
+    }
+
+    private class PendingStreamOperation
+    {
+        public StreamId StreamId { get; }
+        public string? StreamType { get; }
+        public IStoreableEvent[] Events { get; }
+        public bool IsNew { get; }
+
+        public PendingStreamOperation(StreamId streamId, string? streamType, IStoreableEvent[] events, bool isNew)
+        {
+            StreamId = streamId;
+            StreamType = streamType;
+            Events = events;
+            IsNew = isNew;
         }
     }
 }

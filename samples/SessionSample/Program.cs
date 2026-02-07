@@ -51,7 +51,7 @@ async Task CreateHousehold(IEventSessionFactory factory, string id, string name,
 {
     await using var session = factory.OpenSession();
     
-    var household = await session.LoadOrCreateAsync<HouseholdAggregate>(id);
+    var household = await session.AggregateStreamOrCreateAsync<HouseholdAggregate>(id);
     household.Create(id, name, userId);
     
     await session.SaveChangesAsync();
@@ -62,11 +62,11 @@ async Task GenerateInvite(IEventSessionFactory factory, string householdId, stri
     await using var session = factory.OpenSession();
     
     // Load household to verify it exists
-    var household = await session.LoadAsync<HouseholdAggregate>(householdId)
+    var household = await session.AggregateStreamAsync<HouseholdAggregate>(householdId)
         ?? throw new InvalidOperationException("Household not found");
     
     // Create invite
-    var invite = await session.LoadOrCreateAsync<InviteAggregate>(code);
+    var invite = await session.AggregateStreamOrCreateAsync<InviteAggregate>(code);
     invite.Generate(code, householdId, userId);
     
     await session.SaveChangesAsync();
@@ -80,14 +80,14 @@ async Task JoinHousehold(IEventSessionFactory factory, string inviteCode, string
     await using var session = factory.OpenSession();
     
     // Load invite
-    var invite = await session.LoadAsync<InviteAggregate>(inviteCode)
+    var invite = await session.AggregateStreamAsync<InviteAggregate>(inviteCode)
         ?? throw new InvalidOperationException("Invalid invite code");
     
     if (invite.IsUsed)
         throw new InvalidOperationException("Invite already used");
     
     // Load household
-    var household = await session.LoadAsync<HouseholdAggregate>(invite.HouseholdId)
+    var household = await session.AggregateStreamAsync<HouseholdAggregate>(invite.HouseholdId)
         ?? throw new InvalidOperationException("Household not found");
     
     // Make changes to both aggregates
@@ -103,8 +103,8 @@ async Task VerifyState(IEventSessionFactory factory, string householdId, string 
 {
     await using var session = factory.OpenSession();
     
-    var household = await session.LoadAsync<HouseholdAggregate>(householdId);
-    var invite = await session.LoadAsync<InviteAggregate>(inviteCode);
+    var household = await session.AggregateStreamAsync<HouseholdAggregate>(householdId);
+    var invite = await session.AggregateStreamAsync<InviteAggregate>(inviteCode);
     
     Console.WriteLine($"  Household: {household?.Name}");
     Console.WriteLine($"  Members: {string.Join(", ", household?.Members ?? [])}");

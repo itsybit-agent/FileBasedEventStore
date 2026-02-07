@@ -8,7 +8,7 @@ A simple, file-based event store for .NET applications. Perfect for local develo
 
 - 📁 File-based storage (one directory per stream, one JSON file per event)
 - 🔄 Event sourcing with aggregates
-- 🎯 Unit of Work pattern with sessions
+- 🎯 Unit of Work pattern with sessions (Marten-inspired API)
 - 💉 Built-in dependency injection support
 - ⚡ Optimistic concurrency control (per-stream)
 
@@ -54,7 +54,7 @@ public class HouseholdAggregate : Aggregate
         Emit(new MemberJoined(Id, userId, displayName, DateTime.UtcNow));
     }
 
-    // Apply handles both replay (Load) and new events (Emit)
+    // Apply handles both replay and new events
     protected override void Apply(IStoreableEvent evt)
     {
         switch (evt)
@@ -92,7 +92,7 @@ public record MemberJoined(
 
 ## Using Sessions (Unit of Work)
 
-Sessions provide a Unit of Work pattern for working with multiple aggregates. Changes are tracked and saved in a single call, but each aggregate stream is committed independently (see Limitations).
+Sessions provide a Unit of Work pattern inspired by Marten's API. They support both aggregate-level and raw stream operations.
 
 ### Basic Usage
 
@@ -108,15 +108,14 @@ public class JoinHouseholdHandler
 
     public async Task Handle(JoinHouseholdCommand cmd)
     {
-        // Open a session
         await using var session = _sessionFactory.OpenSession();
 
         // Load aggregates (automatically tracked)
-        var invite = await session.LoadAsync<InviteAggregate>(cmd.InviteCode);
+        var invite = await session.AggregateStreamAsync<InviteAggregate>(cmd.InviteCode);
         if (invite is null)
             throw new InvalidOperationException("Invalid invite code");
 
-        var household = await session.LoadAsync<HouseholdAggregate>(invite.HouseholdId);
+        var household = await session.AggregateStreamAsync<HouseholdAggregate>(invite.HouseholdId);
         if (household is null)
             throw new InvalidOperationException("Household not found");
 
@@ -124,108 +123,106 @@ public class JoinHouseholdHandler
         invite.MarkUsed();
         household.AddMember(cmd.UserId, cmd.DisplayName);
 
-        // Commit all changes together
+        // Commit all changes
         await session.SaveChangesAsync();
     }
 }
 ```
 
-### Session Features
-
-#### Identity Map
-
-Loading the same aggregate twice returns the same instance:
+### Aggregate Operations
 
 ```csharp
 await using var session = _sessionFactory.OpenSession();
 
-var household1 = await session.LoadAsync<HouseholdAggregate>("123");
-var household2 = await session.LoadAsync<HouseholdAggregate>("123");
+// Load aggregate (null if not found)
+var household = await session.AggregateStreamAsync<HouseholdAggregate>("123");
+
+// Load or create new
+var invite = await session.AggregateStreamOrCreateAsync<InviteAggregate>(code);
+
+// Manual tracking for externally-created aggregates
+var newAggregate = new MyAggregate();
+newAggregate.DoSomething();
+session.Track(newAggregate);
+
+await session.SaveChangesAsync();
+```
+
+### Raw Stream Operations
+
+For non-aggregate event streams (logs, projections, etc.):
+
+```csharp
+await using var session = _sessionFactory.OpenSession();
+
+// Start a new stream (fails if exists)
+session.StartStream("audit-log-2024", new UserLoggedIn(...));
+
+// Append to existing stream
+session.Append("audit-log-2024", new UserLoggedOut(...));
+
+// Fetch raw events
+var events = await session.FetchStreamAsync("audit-log-2024");
+
+await session.SaveChangesAsync();
+```
+
+### Identity Map
+
+Loading the same aggregate twice returns the same instance:
+
+```csharp
+var household1 = await session.AggregateStreamAsync<HouseholdAggregate>("123");
+var household2 = await session.AggregateStreamAsync<HouseholdAggregate>("123");
 
 // Same instance!
 Debug.Assert(ReferenceEquals(household1, household2));
 ```
 
-#### Load or Create
+## Low-Level Store API
 
-Create a new aggregate if it doesn't exist:
+For advanced scenarios, use `IEventStore` directly:
 
 ```csharp
-await using var session = _sessionFactory.OpenSession();
-
-// Returns existing or new empty aggregate
-var household = await session.LoadOrCreateAsync<HouseholdAggregate>("new-id");
-
-if (string.IsNullOrEmpty(household.Id))
+public class MyService
 {
-    // It's new, initialize it
-    household.Create("new-id", "My Household", userId);
-}
+    private readonly IEventStore _store;
 
-await session.SaveChangesAsync();
-```
-
-#### Manual Tracking
-
-Track aggregates created outside the session:
-
-```csharp
-await using var session = _sessionFactory.OpenSession();
-
-var newHousehold = new HouseholdAggregate();
-newHousehold.Create(Guid.NewGuid().ToString(), "New Home", userId);
-
-// Manually track it
-session.Store(newHousehold);
-
-await session.SaveChangesAsync();
-```
-
-#### Check for Changes
-
-```csharp
-await using var session = _sessionFactory.OpenSession();
-
-var household = await session.LoadAsync<HouseholdAggregate>("123");
-household.AddMember(userId, "New Member");
-
-if (session.HasChanges)
-{
-    await session.SaveChangesAsync();
-}
-```
-
-### Session vs Repository
-
-You can still use `AggregateRepository<T>` for simple single-aggregate operations:
-
-```csharp
-// Simple: single aggregate, immediate save
-public class CreateHouseholdHandler
-{
-    private readonly AggregateRepository<HouseholdAggregate> _repo;
-
-    public async Task Handle(CreateHouseholdCommand cmd)
+    public async Task WriteEvents()
     {
-        var household = new HouseholdAggregate();
-        household.Create(cmd.Id, cmd.Name, cmd.UserId);
-        await _repo.SaveAsync(household);
-    }
-}
+        // Start a new stream
+        await _store.StartStreamAsync("orders-123", new OrderCreated(...));
 
-// Complex: multiple aggregates, coordinated save
-public class JoinHouseholdHandler
-{
-    private readonly IEventSessionFactory _sessionFactory;
+        // Append with concurrency control
+        await _store.AppendToStreamAsync(
+            "orders-123",
+            new OrderShipped(...),
+            ExpectedVersion.Exactly(1));
 
-    public async Task Handle(JoinHouseholdCommand cmd)
-    {
-        await using var session = _sessionFactory.OpenSession();
-        // ... load multiple aggregates, make changes ...
-        await session.SaveChangesAsync();
+        // Fetch events
+        var events = await _store.FetchStreamAsync("orders-123");
+        var version = await _store.GetStreamVersionAsync("orders-123");
     }
 }
 ```
+
+## StreamId Validation
+
+Stream IDs are validated automatically via the `StreamId` value object:
+
+```csharp
+// Implicit conversion from string validates automatically
+StreamId id = "my-stream-123";  // OK
+
+StreamId bad = "../etc/passwd";  // Throws ArgumentException (path traversal)
+StreamId bad = "stream<>name";   // Throws ArgumentException (invalid chars)
+```
+
+Validation rules:
+- Max 200 characters
+- Alphanumeric with hyphens, underscores, dots
+- No path traversal (`..`)
+- No filesystem-invalid characters
 
 ## Samples
 
@@ -234,26 +231,12 @@ Two sample applications are included:
 - **SampleApp** - Basic event store usage with direct `IEventStore` access
 - **SessionSample** - Unit of Work pattern with multi-aggregate operations
 
-Run them with:
-
 ```bash
 dotnet run --project samples/SampleApp
 dotnet run --project samples/SessionSample
 ```
 
-## Configuration
-
-### Custom Options
-
-```csharp
-builder.Services.AddFileEventStore(options =>
-{
-    options.RootPath = "./data/events";
-    options.Clock = new FakeClock(); // For testing
-});
-```
-
-### Storage Structure
+## Storage Structure
 
 Events are stored in directories per stream, with one JSON file per event:
 
@@ -262,51 +245,35 @@ data/streams/
 ├── householdaggregate-abc123/
 │   ├── 000001.json
 │   └── 000002.json
-├── householdaggregate-def456/
+├── inviteaggregate-INV001/
 │   └── 000001.json
-└── inviteaggregate-INV001/
-    ├── 000001.json
-    └── 000002.json
-```
-
-Each file contains a single event with metadata:
-
-```json
-[
-  {
-    "version": 1,
-    "timestamp": "2024-02-07T09:00:00Z",
-    "eventType": "HouseholdCreated",
-    "data": {
-      "householdId": "abc123",
-      "name": "The Smiths",
-      "creatorId": "user-1",
-      "createdAt": "2024-02-07T09:00:00Z"
-    }
-  }
-]
 ```
 
 ## API Reference
 
-### IEventSession
+### IEventSession (Unit of Work)
 
 | Method | Description |
 |--------|-------------|
-| `LoadAsync<T>(id)` | Load aggregate by id (null if not found) |
-| `LoadOrCreateAsync<T>(id)` | Load or create new aggregate |
-| `Store<T>(aggregate)` | Manually track an aggregate |
+| `AggregateStreamAsync<T>(id)` | Load and rebuild aggregate from events (null if not found) |
+| `AggregateStreamOrCreateAsync<T>(id)` | Load or create new aggregate |
+| `Track<T>(aggregate)` | Manually track an aggregate for saving |
+| `StartStream(streamId, events)` | Queue events to start a new stream |
+| `StartStream<T>(id, events)` | Queue events to start a new typed stream |
+| `Append(streamId, events)` | Queue events to append to existing stream |
+| `FetchStreamAsync(streamId)` | Fetch raw events (immediate read) |
 | `SaveChangesAsync()` | Commit all pending changes |
 | `HasChanges` | True if there are uncommitted events |
 
-### IEventStore
+### IEventStore (Low-Level)
 
 | Method | Description |
 |--------|-------------|
-| `AppendAsync(...)` | Append events to a stream |
-| `LoadEventsAsync(streamId)` | Load events from a stream |
-| `LoadStreamAsync(streamId)` | Load events with metadata |
-| `GetCurrentVersionAsync(streamId)` | Get stream version |
+| `StartStreamAsync(streamId, events)` | Start a new stream (fails if exists) |
+| `AppendToStreamAsync(streamId, events, expectedVersion)` | Append events with concurrency check |
+| `FetchStreamAsync(streamId)` | Fetch events with metadata |
+| `FetchEventsAsync(streamId)` | Fetch just event data |
+| `GetStreamVersionAsync(streamId)` | Get current stream version |
 | `StreamExistsAsync(streamId)` | Check if stream exists |
 
 ## Limitations
@@ -318,7 +285,7 @@ Each file contains a single event with metadata:
 
 ## Future: Storage Abstraction
 
-The session interface (`IEventSession`) is designed to be swappable. Future versions may include:
+The session interface is designed to be swappable. Future versions may include:
 
 - `MartenEventSession` — backed by Marten/PostgreSQL
 - `EventStoreDbSession` — backed by EventStoreDB
@@ -326,9 +293,8 @@ The session interface (`IEventSession`) is designed to be swappable. Future vers
 Your business code stays the same:
 
 ```csharp
-// Works with any implementation
 await using var session = _sessionFactory.OpenSession();
-var aggregate = await session.LoadAsync<MyAggregate>(id);
+var aggregate = await session.AggregateStreamAsync<MyAggregate>(id);
 // ...
 await session.SaveChangesAsync();
 ```

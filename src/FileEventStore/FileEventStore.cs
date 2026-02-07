@@ -2,7 +2,6 @@ using FileEventStore.Serialization;
 
 namespace FileEventStore;
 
-
 public class FileEventStore : IEventStore
 {
     private readonly string _rootPath;
@@ -26,10 +25,29 @@ public class FileEventStore : IEventStore
     private string GetEventFilePath(string streamId, long version) =>
         Path.Combine(GetStreamPath(streamId), $"{version:D6}.json");
 
-    public async Task<long> AppendAsync(StreamId streamId, string? streamType, IEnumerable<IStoreableEvent> events, ExpectedVersion expectedVersion)
-    {
-        // StreamId validates on construction via implicit conversion
+    public Task<long> StartStreamAsync(StreamId streamId, string? streamType, IEnumerable<IStoreableEvent> events)
+        => AppendInternalAsync(streamId, streamType, events, ExpectedVersion.None);
 
+    public Task<long> StartStreamAsync(StreamId streamId, IEnumerable<IStoreableEvent> events)
+        => StartStreamAsync(streamId, null, events);
+
+    public Task<long> StartStreamAsync(StreamId streamId, IStoreableEvent evt)
+        => StartStreamAsync(streamId, null, [evt]);
+
+    public Task<long> AppendToStreamAsync(StreamId streamId, IStoreableEvent evt, ExpectedVersion expectedVersion)
+        => AppendToStreamAsync(streamId, null, [evt], expectedVersion);
+
+    public Task<long> AppendToStreamAsync(StreamId streamId, IEnumerable<IStoreableEvent> events, ExpectedVersion expectedVersion)
+        => AppendInternalAsync(streamId, null, events, expectedVersion);
+
+    public Task<long> AppendToStreamAsync(StreamId streamId, string? streamType, IEnumerable<IStoreableEvent> events, ExpectedVersion expectedVersion)
+        => AppendInternalAsync(streamId, streamType, events, expectedVersion);
+
+    public Task<long> AppendToStreamAsync(StreamId streamId, string? streamType, IStoreableEvent evt, ExpectedVersion expectedVersion)
+        => AppendInternalAsync(streamId, streamType, [evt], expectedVersion);
+
+    private async Task<long> AppendInternalAsync(StreamId streamId, string? streamType, IEnumerable<IStoreableEvent> events, ExpectedVersion expectedVersion)
+    {
         var streamPath = GetStreamPath(streamId);
         var currentVersion = GetCurrentStreamVersion(streamPath);
 
@@ -83,22 +101,13 @@ public class FileEventStore : IEventStore
         return version;
     }
 
-    public Task<long> AppendAsync(StreamId streamId, string? streamType, IStoreableEvent evt, ExpectedVersion expectedVersion)
-        => AppendAsync(streamId, streamType, new[] { evt }, expectedVersion);
-
-    public Task<long> AppendAsync(StreamId streamId, IEnumerable<IStoreableEvent> events, ExpectedVersion expectedVersion)
-        => AppendAsync(streamId, null, events, expectedVersion);
-
-    public Task<long> AppendAsync(StreamId streamId, IStoreableEvent evt, ExpectedVersion expectedVersion)
-        => AppendAsync(streamId, null, [evt], expectedVersion);
-
-    public async Task<IReadOnlyList<IStoreableEvent>> LoadEventsAsync(StreamId streamId)
+    public async Task<IReadOnlyList<IStoreableEvent>> FetchEventsAsync(StreamId streamId)
     {
-        var stored = await LoadStreamAsync(streamId);
+        var stored = await FetchStreamAsync(streamId);
         return stored.Select(e => e.Data).ToList();
     }
 
-    public async Task<IReadOnlyList<StoredEvent>> LoadStreamAsync(StreamId streamId)
+    public async Task<IReadOnlyList<StoredEvent>> FetchStreamAsync(StreamId streamId)
     {
         var streamPath = GetStreamPath(streamId);
 
@@ -120,7 +129,7 @@ public class FileEventStore : IEventStore
         return events;
     }
 
-    public Task<long> GetCurrentVersionAsync(StreamId streamId)
+    public Task<long> GetStreamVersionAsync(StreamId streamId)
     {
         var streamPath = GetStreamPath(streamId);
         return Task.FromResult(GetCurrentStreamVersion(streamPath));
@@ -146,5 +155,4 @@ public class FileEventStore : IEventStore
             .Select(name => long.TryParse(name, out var v) ? v : 0)
             .Max();
     }
-
 }

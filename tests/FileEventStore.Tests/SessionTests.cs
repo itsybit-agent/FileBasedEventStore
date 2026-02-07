@@ -35,23 +35,23 @@ public class SessionTests : IDisposable
     // =========================================================================
 
     [Fact]
-    public async Task LoadAsync_returns_null_when_aggregate_does_not_exist()
+    public async Task AggregateStreamAsync_returns_null_when_aggregate_does_not_exist()
     {
         await using var session = _sessionFactory.OpenSession();
 
-        var result = await session.LoadAsync<TestAggregate>("non-existent");
+        var result = await session.AggregateStreamAsync<TestAggregate>("non-existent");
 
         Assert.Null(result);
     }
 
     [Fact]
-    public async Task LoadAsync_returns_aggregate_with_state_from_stored_events()
+    public async Task AggregateStreamAsync_returns_aggregate_with_state_from_stored_events()
     {
         // Arrange: create and save an aggregate
         var id = Guid.NewGuid().ToString();
         await using (var session = _sessionFactory.OpenSession())
         {
-            var aggregate = await session.LoadOrCreateAsync<TestAggregate>(id);
+            var aggregate = await session.AggregateStreamOrCreateAsync<TestAggregate>(id);
             aggregate.Create(id, "Test Name");
             await session.SaveChangesAsync();
         }
@@ -59,7 +59,7 @@ public class SessionTests : IDisposable
         // Act: load in a new session
         await using (var session = _sessionFactory.OpenSession())
         {
-            var loaded = await session.LoadAsync<TestAggregate>(id);
+            var loaded = await session.AggregateStreamAsync<TestAggregate>(id);
 
             // Assert
             Assert.NotNull(loaded);
@@ -69,25 +69,25 @@ public class SessionTests : IDisposable
     }
 
     [Fact]
-    public async Task LoadOrCreateAsync_returns_new_aggregate_when_not_exists()
+    public async Task AggregateStreamOrCreateAsync_returns_new_aggregate_when_not_exists()
     {
         await using var session = _sessionFactory.OpenSession();
 
-        var aggregate = await session.LoadOrCreateAsync<TestAggregate>("new-id");
+        var aggregate = await session.AggregateStreamOrCreateAsync<TestAggregate>("new-id");
 
         Assert.NotNull(aggregate);
         Assert.Equal("", aggregate.Id); // Not initialized yet
     }
 
     [Fact]
-    public async Task LoadOrCreateAsync_returns_existing_aggregate_when_exists()
+    public async Task AggregateStreamOrCreateAsync_returns_existing_aggregate_when_exists()
     {
         var id = Guid.NewGuid().ToString();
         
         // Create first
         await using (var session = _sessionFactory.OpenSession())
         {
-            var aggregate = await session.LoadOrCreateAsync<TestAggregate>(id);
+            var aggregate = await session.AggregateStreamOrCreateAsync<TestAggregate>(id);
             aggregate.Create(id, "Original");
             await session.SaveChangesAsync();
         }
@@ -95,7 +95,7 @@ public class SessionTests : IDisposable
         // Load via LoadOrCreate
         await using (var session = _sessionFactory.OpenSession())
         {
-            var loaded = await session.LoadOrCreateAsync<TestAggregate>(id);
+            var loaded = await session.AggregateStreamOrCreateAsync<TestAggregate>(id);
 
             Assert.Equal("Original", loaded.Name);
         }
@@ -112,15 +112,15 @@ public class SessionTests : IDisposable
         
         await using (var session = _sessionFactory.OpenSession())
         {
-            var aggregate = await session.LoadOrCreateAsync<TestAggregate>(id);
+            var aggregate = await session.AggregateStreamOrCreateAsync<TestAggregate>(id);
             aggregate.Create(id, "Test");
             await session.SaveChangesAsync();
         }
 
         await using (var session = _sessionFactory.OpenSession())
         {
-            var first = await session.LoadAsync<TestAggregate>(id);
-            var second = await session.LoadAsync<TestAggregate>(id);
+            var first = await session.AggregateStreamAsync<TestAggregate>(id);
+            var second = await session.AggregateStreamAsync<TestAggregate>(id);
 
             Assert.Same(first, second);
         }
@@ -133,17 +133,17 @@ public class SessionTests : IDisposable
         
         await using (var session = _sessionFactory.OpenSession())
         {
-            var aggregate = await session.LoadOrCreateAsync<TestAggregate>(id);
+            var aggregate = await session.AggregateStreamOrCreateAsync<TestAggregate>(id);
             aggregate.Create(id, "Original");
             await session.SaveChangesAsync();
         }
 
         await using (var session = _sessionFactory.OpenSession())
         {
-            var first = await session.LoadAsync<TestAggregate>(id);
+            var first = await session.AggregateStreamAsync<TestAggregate>(id);
             first!.Rename("Updated");
 
-            var second = await session.LoadAsync<TestAggregate>(id);
+            var second = await session.AggregateStreamAsync<TestAggregate>(id);
 
             Assert.Equal("Updated", second!.Name);
         }
@@ -160,7 +160,7 @@ public class SessionTests : IDisposable
 
         await using (var session = _sessionFactory.OpenSession())
         {
-            var aggregate = await session.LoadOrCreateAsync<TestAggregate>(id);
+            var aggregate = await session.AggregateStreamOrCreateAsync<TestAggregate>(id);
             aggregate.Create(id, "New Aggregate");
             await session.SaveChangesAsync();
         }
@@ -168,7 +168,7 @@ public class SessionTests : IDisposable
         // Verify in new session
         await using (var session = _sessionFactory.OpenSession())
         {
-            var loaded = await session.LoadAsync<TestAggregate>(id);
+            var loaded = await session.AggregateStreamAsync<TestAggregate>(id);
             Assert.NotNull(loaded);
             Assert.Equal("New Aggregate", loaded.Name);
         }
@@ -182,7 +182,7 @@ public class SessionTests : IDisposable
         // Create
         await using (var session = _sessionFactory.OpenSession())
         {
-            var aggregate = await session.LoadOrCreateAsync<TestAggregate>(id);
+            var aggregate = await session.AggregateStreamOrCreateAsync<TestAggregate>(id);
             aggregate.Create(id, "Original");
             await session.SaveChangesAsync();
         }
@@ -190,7 +190,7 @@ public class SessionTests : IDisposable
         // Modify
         await using (var session = _sessionFactory.OpenSession())
         {
-            var aggregate = await session.LoadAsync<TestAggregate>(id);
+            var aggregate = await session.AggregateStreamAsync<TestAggregate>(id);
             aggregate!.Rename("Modified");
             await session.SaveChangesAsync();
         }
@@ -198,7 +198,7 @@ public class SessionTests : IDisposable
         // Verify
         await using (var session = _sessionFactory.OpenSession())
         {
-            var loaded = await session.LoadAsync<TestAggregate>(id);
+            var loaded = await session.AggregateStreamAsync<TestAggregate>(id);
             Assert.Equal("Modified", loaded!.Name);
         }
     }
@@ -211,8 +211,8 @@ public class SessionTests : IDisposable
 
         await using (var session = _sessionFactory.OpenSession())
         {
-            var agg1 = await session.LoadOrCreateAsync<TestAggregate>(id1);
-            var agg2 = await session.LoadOrCreateAsync<TestAggregate>(id2);
+            var agg1 = await session.AggregateStreamOrCreateAsync<TestAggregate>(id1);
+            var agg2 = await session.AggregateStreamOrCreateAsync<TestAggregate>(id2);
 
             agg1.Create(id1, "First");
             agg2.Create(id2, "Second");
@@ -223,8 +223,8 @@ public class SessionTests : IDisposable
         // Verify both
         await using (var session = _sessionFactory.OpenSession())
         {
-            var loaded1 = await session.LoadAsync<TestAggregate>(id1);
-            var loaded2 = await session.LoadAsync<TestAggregate>(id2);
+            var loaded1 = await session.AggregateStreamAsync<TestAggregate>(id1);
+            var loaded2 = await session.AggregateStreamAsync<TestAggregate>(id2);
 
             Assert.Equal("First", loaded1!.Name);
             Assert.Equal("Second", loaded2!.Name);
@@ -238,7 +238,7 @@ public class SessionTests : IDisposable
 
         await using (var session = _sessionFactory.OpenSession())
         {
-            var aggregate = await session.LoadOrCreateAsync<TestAggregate>(id);
+            var aggregate = await session.AggregateStreamOrCreateAsync<TestAggregate>(id);
             aggregate.Create(id, "Test");
             await session.SaveChangesAsync();
         }
@@ -246,7 +246,7 @@ public class SessionTests : IDisposable
         // Load but don't modify
         await using (var session = _sessionFactory.OpenSession())
         {
-            var aggregate = await session.LoadAsync<TestAggregate>(id);
+            var aggregate = await session.AggregateStreamAsync<TestAggregate>(id);
             
             Assert.False(session.HasChanges);
             await session.SaveChangesAsync(); // Should not throw
@@ -272,14 +272,14 @@ public class SessionTests : IDisposable
 
         await using (var session = _sessionFactory.OpenSession())
         {
-            var aggregate = await session.LoadOrCreateAsync<TestAggregate>(id);
+            var aggregate = await session.AggregateStreamOrCreateAsync<TestAggregate>(id);
             aggregate.Create(id, "Test");
             await session.SaveChangesAsync();
         }
 
         await using (var session = _sessionFactory.OpenSession())
         {
-            await session.LoadAsync<TestAggregate>(id);
+            await session.AggregateStreamAsync<TestAggregate>(id);
 
             Assert.False(session.HasChanges);
         }
@@ -290,7 +290,7 @@ public class SessionTests : IDisposable
     {
         await using var session = _sessionFactory.OpenSession();
 
-        var aggregate = await session.LoadOrCreateAsync<TestAggregate>("test");
+        var aggregate = await session.AggregateStreamOrCreateAsync<TestAggregate>("test");
         aggregate.Create("test", "Name");
 
         Assert.True(session.HasChanges);
@@ -301,7 +301,7 @@ public class SessionTests : IDisposable
     {
         await using var session = _sessionFactory.OpenSession();
 
-        var aggregate = await session.LoadOrCreateAsync<TestAggregate>("test");
+        var aggregate = await session.AggregateStreamOrCreateAsync<TestAggregate>("test");
         aggregate.Create("test", "Name");
 
         await session.SaveChangesAsync();
@@ -321,7 +321,7 @@ public class SessionTests : IDisposable
         // Create initial
         await using (var session = _sessionFactory.OpenSession())
         {
-            var aggregate = await session.LoadOrCreateAsync<TestAggregate>(id);
+            var aggregate = await session.AggregateStreamOrCreateAsync<TestAggregate>(id);
             aggregate.Create(id, "Original");
             await session.SaveChangesAsync();
         }
@@ -330,8 +330,8 @@ public class SessionTests : IDisposable
         await using var session1 = _sessionFactory.OpenSession();
         await using var session2 = _sessionFactory.OpenSession();
 
-        var agg1 = await session1.LoadAsync<TestAggregate>(id);
-        var agg2 = await session2.LoadAsync<TestAggregate>(id);
+        var agg1 = await session1.AggregateStreamAsync<TestAggregate>(id);
+        var agg2 = await session2.AggregateStreamAsync<TestAggregate>(id);
 
         // Modify both
         agg1!.Rename("From Session 1");
@@ -352,35 +352,35 @@ public class SessionTests : IDisposable
     [InlineData("../etc/passwd")]
     [InlineData("..")]
     [InlineData("foo/../bar")]
-    public async Task LoadAsync_rejects_path_traversal_ids(string maliciousId)
+    public async Task AggregateStreamAsync_rejects_path_traversal_ids(string maliciousId)
     {
         await using var session = _sessionFactory.OpenSession();
 
         await Assert.ThrowsAsync<ArgumentException>(() => 
-            session.LoadAsync<TestAggregate>(maliciousId));
+            session.AggregateStreamAsync<TestAggregate>(maliciousId));
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData(null)]
-    public async Task LoadAsync_rejects_empty_ids(string? emptyId)
+    public async Task AggregateStreamAsync_rejects_empty_ids(string? emptyId)
     {
         await using var session = _sessionFactory.OpenSession();
 
         await Assert.ThrowsAsync<ArgumentException>(() => 
-            session.LoadAsync<TestAggregate>(emptyId!));
+            session.AggregateStreamAsync<TestAggregate>(emptyId!));
     }
 
     [Theory]
     [InlineData("../etc/passwd")]
     [InlineData("..")]
-    public async Task LoadOrCreateAsync_rejects_path_traversal_ids(string maliciousId)
+    public async Task AggregateStreamOrCreateAsync_rejects_path_traversal_ids(string maliciousId)
     {
         await using var session = _sessionFactory.OpenSession();
 
         await Assert.ThrowsAsync<ArgumentException>(() => 
-            session.LoadOrCreateAsync<TestAggregate>(maliciousId));
+            session.AggregateStreamOrCreateAsync<TestAggregate>(maliciousId));
     }
 
     // =========================================================================
@@ -397,14 +397,14 @@ public class SessionTests : IDisposable
             var aggregate = new TestAggregate();
             aggregate.Create(id, "External");
 
-            session.Store(aggregate);
+            session.Track(aggregate);
             await session.SaveChangesAsync();
         }
 
         // Verify
         await using (var session = _sessionFactory.OpenSession())
         {
-            var loaded = await session.LoadAsync<TestAggregate>(id);
+            var loaded = await session.AggregateStreamAsync<TestAggregate>(id);
             Assert.Equal("External", loaded!.Name);
         }
     }

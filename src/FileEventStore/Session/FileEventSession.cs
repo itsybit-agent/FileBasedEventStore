@@ -27,13 +27,12 @@ public class FileEventSession : IEventSession
     // AGGREGATE OPERATIONS
     // =========================================================================
 
-    public async Task<T?> AggregateStreamAsync<T>(string id) where T : Aggregate, new()
+    public async Task<T?> AggregateStreamAsync<T>(AggregateId id) where T : Aggregate, new()
     {
         ThrowIfDisposed();
-        ValidateAggregateId(id);
-        
+
         var key = GetKey<T>(id);
-        
+
         // Return cached instance if already loaded
         if (_trackedAggregates.TryGetValue(key, out var entry))
         {
@@ -49,18 +48,17 @@ public class FileEventSession : IEventSession
 
         var aggregate = new T();
         aggregate.Load(events);
-        
+
         // Track it with the version at load time
         _trackedAggregates[key] = new AggregateEntry(aggregate, typeof(T), aggregate.Version);
-        
+
         return aggregate;
     }
 
-    public async Task<T> AggregateStreamOrCreateAsync<T>(string id) where T : Aggregate, new()
+    public async Task<T> AggregateStreamOrCreateAsync<T>(AggregateId id) where T : Aggregate, new()
     {
         ThrowIfDisposed();
-        ValidateAggregateId(id);
-        
+
         var aggregate = await AggregateStreamAsync<T>(id);
         if (aggregate is not null)
             return aggregate;
@@ -214,18 +212,6 @@ public class FileEventSession : IEventSession
     
     private static StreamId GetStreamId(Type type, string id) => 
         StreamId.From($"{type.Name.ToLowerInvariant()}-{id}");
-
-    private static void ValidateAggregateId(string id)
-    {
-        if (string.IsNullOrWhiteSpace(id))
-            throw new ArgumentException("Aggregate id cannot be null or empty.", nameof(id));
-        
-        if (id.Contains(".."))
-            throw new ArgumentException("Aggregate id cannot contain '..' (path traversal).", nameof(id));
-        
-        if (id.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-            throw new ArgumentException("Aggregate id contains invalid characters.", nameof(id));
-    }
 
     // =========================================================================
     // INTERNAL TYPES

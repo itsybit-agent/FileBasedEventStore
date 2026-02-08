@@ -5,10 +5,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Authors>ItsyBIT AB</Authors>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Description>File based event store for .NET applications. For home use only 🤪</Description>
-  
+
     <PackageReleaseNotes>
+        v1.2.0
+        - Added AggregateId value object to prevent passing stream ids where aggregate ids are expected
+        - Aggregate load operations (AggregateStreamAsync, LoadAsync) now accept AggregateId
         v1.1.0
         - Added Session/Unit of Work pattern (IEventSession, IEventSessionFactory)
         - Track loaded aggregates with identity map

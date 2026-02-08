@@ -1,3 +1,5 @@
+using FileEventStore.Aggregates;
+
 namespace FileEventStore.Session;
 
 /// <summary>
@@ -10,24 +12,24 @@ public interface IEventSession : IAsyncDisposable
     // =========================================================================
     // AGGREGATE OPERATIONS
     // =========================================================================
-    
+
     /// <summary>
     /// Load and rebuild an aggregate from its event stream.
     /// Returns null if stream doesn't exist.
     /// Subsequent calls with the same id return the cached instance.
     /// </summary>
-    Task<T?> AggregateStreamAsync<T>(string id) where T : Aggregates.Aggregate, new();
+    Task<T?> AggregateStreamAsync<T>(AggregateId id) where T : Aggregate, new();
 
     /// <summary>
     /// Load and rebuild an aggregate, creating a new one if stream doesn't exist.
     /// </summary>
-    Task<T> AggregateStreamOrCreateAsync<T>(string id) where T : Aggregates.Aggregate, new();
+    Task<T> AggregateStreamOrCreateAsync<T>(AggregateId id) where T : Aggregate, new();
 
     /// <summary>
     /// Track an externally-created aggregate for saving.
     /// Aggregates loaded via AggregateStreamAsync are tracked automatically.
     /// </summary>
-    void Track<T>(T aggregate) where T : Aggregates.Aggregate;
+    void Track<T>(T aggregate) where T : Aggregate;
 
     // =========================================================================
     // STREAM OPERATIONS (raw access)
@@ -41,7 +43,7 @@ public interface IEventSession : IAsyncDisposable
     /// <summary>
     /// Queue events to start a new stream with aggregate type. Fails on SaveChangesAsync if stream exists.
     /// </summary>
-    void StartStream<T>(string id, params IStoreableEvent[] events) where T : Aggregates.Aggregate;
+    void StartStream<T>(string id, params IStoreableEvent[] events) where T : Aggregate;
     
     /// <summary>
     /// Queue events to append to an existing stream.

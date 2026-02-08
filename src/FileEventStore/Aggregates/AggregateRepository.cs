@@ -11,7 +11,7 @@ namespace FileEventStore.Aggregates
             _streamIdFromAggregateId = streamIdFromAggregateId ?? (id => $"{typeof(T).Name.ToLowerInvariant()}-{id}");
         }
 
-        public async Task<T?> LoadAsync(string id)
+        public async Task<T?> LoadAsync(AggregateId id)
         {
             var streamId = _streamIdFromAggregateId(id);
             var events = await _store.FetchStreamAsync(streamId);
@@ -24,7 +24,7 @@ namespace FileEventStore.Aggregates
             return aggregate;
         }
 
-        public async Task<T> LoadOrCreateAsync(string id)
+        public async Task<T> LoadOrCreateAsync(AggregateId id)
         {
             return await LoadAsync(id) ?? new T();
         }

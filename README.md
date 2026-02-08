@@ -80,14 +80,20 @@ public record HouseholdCreated(
     string Name,
     string CreatorId,
     DateTime CreatedAt
-) : IStoreableEvent;
+) : IStoreableEvent
+{
+    public string TimestampUtc { get; set; } = "";
+}
 
 public record MemberJoined(
     string HouseholdId,
     string UserId,
     string DisplayName,
     DateTime JoinedAt
-) : IStoreableEvent;
+) : IStoreableEvent
+{
+    public string TimestampUtc { get; set; } = "";
+}
 ```
 
 ## Using Sessions (Unit of Work)
@@ -206,7 +212,26 @@ public class MyService
 }
 ```
 
-## StreamId Validation
+## Value Objects
+
+### AggregateId
+
+Aggregate load operations accept an `AggregateId` value object to prevent accidentally passing a full stream id (e.g. `"order-abc123"`) where a raw aggregate id (`"abc123"`) is expected.
+
+```csharp
+// Implicit conversion from string — existing code keeps working
+var household = await session.AggregateStreamAsync<HouseholdAggregate>("abc123");
+
+// Explicit construction
+var id = AggregateId.From("abc123");
+```
+
+Validation rules:
+- Not null or empty
+- No path traversal (`..`)
+- No filesystem-invalid characters
+
+### StreamId
 
 Stream IDs are validated automatically via the `StreamId` value object:
 
@@ -255,8 +280,8 @@ data/streams/
 
 | Method | Description |
 |--------|-------------|
-| `AggregateStreamAsync<T>(id)` | Load and rebuild aggregate from events (null if not found) |
-| `AggregateStreamOrCreateAsync<T>(id)` | Load or create new aggregate |
+| `AggregateStreamAsync<T>(AggregateId)` | Load and rebuild aggregate from events (null if not found) |
+| `AggregateStreamOrCreateAsync<T>(AggregateId)` | Load or create new aggregate |
 | `Track<T>(aggregate)` | Manually track an aggregate for saving |
 | `StartStream(streamId, events)` | Queue events to start a new stream |
 | `StartStream<T>(id, events)` | Queue events to start a new typed stream |
